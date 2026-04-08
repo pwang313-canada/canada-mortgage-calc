@@ -122,14 +122,14 @@ const HomeScreen = ({ navigation }) => {
   const [errors, setErrors] = useState({});
   const [loadingRates, setLoadingRates] = useState(false);
 
-  // Bank rates (hardcoded fallback)
+  // Bank rates with different prime rates
   const bankRates = {
-    RBC: 4.45,
-    SCOTIABANK: 4.45,
-    BMO: 4.45,
-    CIBC: 4.45,
-    NATIONAL_BANK: 4.45,
-    TD: 4.60
+    RBC: { name: 'RBC', primeRate: 4.45, displayRate: '4.45%' },
+    SCOTIABANK: { name: 'Scotiabank', primeRate: 4.45, displayRate: '4.45%' },
+    BMO: { name: 'BMO', primeRate: 4.45, displayRate: '4.45%' },
+    CIBC: { name: 'CIBC', primeRate: 4.45, displayRate: '4.45%' },
+    NATIONAL_BANK: { name: 'National Bank', primeRate: 4.45, displayRate: '4.45%' },
+    TD: { name: 'TD', primeRate: 4.60, displayRate: '4.60%' }
   };
   
   const [selectedBank, setSelectedBank] = useState('RBC');
@@ -139,7 +139,7 @@ const HomeScreen = ({ navigation }) => {
     let rate = null;
     
     if (mortgageType === 'variable') {
-      const primeRate = bankRates[selectedBank];
+      const primeRate = bankRates[selectedBank].primeRate;
       const spreadValue = spread ? parseFloat(spread) : 0;
       rate = primeRate + spreadValue;
     } else {
@@ -183,8 +183,9 @@ const HomeScreen = ({ navigation }) => {
       annualRate: inputs.rate,
       paymentFrequency,
       mortgageType,
-      selectedBank,
-      spread: spread || '0'
+      selectedBank: bankRates[selectedBank].name,
+      spread: spread || '0',
+      primeRateUsed: bankRates[selectedBank].primeRate
     });
   };
 
@@ -203,12 +204,6 @@ const HomeScreen = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={localStyles.scrollContainer}>
-        <View style={localStyles.updateInfo}>
-          <Text style={localStyles.updateInfoText}>
-            Prime Rate: {bankRates[selectedBank]}%
-          </Text>
-        </View>
-        
         <View style={localStyles.row}>
           <View style={localStyles.halfWidth}>
             <SimpleInputField
@@ -268,38 +263,42 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </View>
         
-        {/* Bank Selection */}
+        {/* Bank Selection with Prime Rate Display */}
         <View style={localStyles.bankContainer}>
           <Text style={localStyles.label}>Select Bank</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={localStyles.bankRow}>
-              {Object.entries(bankRates).map(([key, rate]) => (
+              {Object.entries(bankRates).map(([key, bank]) => (
                 <TouchableOpacity
                   key={key}
-                  style={[localStyles.bankButton, selectedBank === key && localStyles.bankButtonActive]}
+                  style={[
+                    localStyles.bankButton,
+                    selectedBank === key && localStyles.bankButtonActive
+                  ]}
                   onPress={() => setSelectedBank(key)}
                 >
-                  <Text style={[localStyles.bankText, selectedBank === key && localStyles.bankTextActive]}>
-                    {key}
+                  <Text style={[
+                    localStyles.bankName,
+                    selectedBank === key && localStyles.bankTextActive
+                  ]}>
+                    {bank.name}
                   </Text>
+                  {/* Show prime rate under bank name when selected */}
+                  {selectedBank === key && (
+                    <Text style={localStyles.bankPrimeRate}>
+                      Prime: {bank.displayRate}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity
-                style={[localStyles.bankButton, selectedBank === 'OTHER' && localStyles.bankButtonActive]}
-                onPress={() => setSelectedBank('OTHER')}
-              >
-                <Text style={[localStyles.bankText, selectedBank === 'OTHER' && localStyles.bankTextActive]}>
-                  Other
-                </Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
         
         {/* Spread for Variable Rate */}
-        {mortgageType === 'variable' && selectedBank !== 'OTHER' && (
+        {mortgageType === 'variable' && (
           <SimpleInputField
-            label="Spread/Discount (e.g., -0.95)"
+            label="Spread/Discount (e.g., -0.95, -1.05)"
             value={spread}
             onChangeText={setSpread}
             placeholder="-0.95"
@@ -307,10 +306,9 @@ const HomeScreen = ({ navigation }) => {
           />
         )}
         
-        {/* Custom Rate for Fixed or Other */}
-        {(mortgageType === 'fixed' || selectedBank === 'OTHER') && (
+        {(mortgageType === 'fixed') && (
           <SimpleInputField
-            label={mortgageType === 'fixed' ? "Fixed Rate (%)" : "Custom Rate (%)"}
+            label={mortgageType === 'fixed' ? "Fixed Rate (%)" : "Custom Interest Rate (%)"}
             value={customRate}
             onChangeText={setCustomRate}
             placeholder="Enter rate"
@@ -322,7 +320,22 @@ const HomeScreen = ({ navigation }) => {
         {finalRate && (
           <View style={localStyles.ratePreview}>
             <Text style={localStyles.ratePreviewLabel}>Final Rate:</Text>
-            <Text style={localStyles.ratePreviewValue}>{finalRate}%</Text>
+            {mortgageType === 'variable' && finalRate && (
+              <View style={localStyles.formulaBox}>
+                <Text style={localStyles.ratePreviewLabel}>
+                  {bankRates[selectedBank].primeRate}% + ({parseFloat(spread) > 0 ? '+' : ''}{spread || 0}%) = {finalRate}%
+                </Text>
+              </View>
+            )}
+        
+        {/* Fixed Rate Display - Just show the rate */}
+        {mortgageType === 'fixed' && finalRate && (
+          <View style={localStyles.formulaBox}>
+            <Text style={localStyles.formulaText}>
+              Fixed Rate: {finalRate}%
+            </Text>
+          </View>
+        )}
           </View>
         )}
         
@@ -356,17 +369,6 @@ const localStyles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#666',
-  },
-  updateInfo: {
-    backgroundColor: '#e8f4fd',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  updateInfoText: {
-    fontSize: 12,
-    color: '#007bff',
   },
   row: {
     flexDirection: 'row',
@@ -412,38 +414,43 @@ const localStyles = StyleSheet.create({
   },
   bankRow: {
     flexDirection: 'row',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 4,
+    gap: 8,
   },
   bankButton: {
+    backgroundColor: '#f0f0f0',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 6,
-    marginHorizontal: 2,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 80,
   },
   bankButtonActive: {
     backgroundColor: '#28a745',
   },
-  bankText: {
-    fontSize: 12,
-    color: '#666',
+  bankName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
   },
   bankTextActive: {
     color: '#fff',
-    fontWeight: '600',
+  },
+  bankPrimeRate: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
   },
   ratePreview: {
     backgroundColor: '#e8f4fd',
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 10,
+    borderRadius: 5,
+    padding: 10,
+    marginVertical: 5,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   ratePreviewLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#007bff',
     fontWeight: '600',
   },
@@ -452,9 +459,20 @@ const localStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#007bff',
   },
+  formulaBox: {
+    backgroundColor: '#e8f4fd',
+    borderRadius: 4,
+    padding: 4,
+    marginBottom: 2,
+    alignItems: 'center',
+  },
+  formulaText: {
+    fontSize: 16,
+    color: '#007bff',
+  },
   calculateButton: {
     backgroundColor: '#007bff',
-    padding: 16,
+    padding: 10,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
