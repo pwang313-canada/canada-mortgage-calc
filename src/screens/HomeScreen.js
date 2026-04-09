@@ -12,24 +12,86 @@ import {
   TextInput
 } from 'react-native';
 
-// Simple InputField component inline to avoid imports
-const SimpleInputField = ({ label, value, onChangeText, placeholder, rightLabel, error }) => (
-  <View style={localStyles.inputContainer}>
-    <Text style={localStyles.inputLabel}>{label}</Text>
-    <View style={[localStyles.inputWrapper, error && localStyles.inputError]}>
-      <TextInput
-        style={localStyles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        keyboardType="numeric"
-        placeholderTextColor="#999"
-      />
-      {rightLabel && <Text style={localStyles.inputRightLabel}>{rightLabel}</Text>}
+// Helper function to format number with commas
+const formatNumberWithCommas = (value) => {
+  if (!value) return '';
+  // Remove any existing commas and non-numeric characters except decimal
+  const cleanValue = value.toString().replace(/[^0-9.]/g, '');
+  if (!cleanValue) return '';
+  
+  // Split into integer and decimal parts
+  const parts = cleanValue.split('.');
+  let integerPart = parts[0];
+  const decimalPart = parts[1] !== undefined ? '.' + parts[1] : '';
+  
+  // Remove leading zeros but keep single zero
+  integerPart = integerPart.replace(/^0+/, '');
+  if (integerPart === '') integerPart = '0';
+  
+  // Add commas to integer part
+  integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  return integerPart + decimalPart;
+};
+
+// Helper function to remove commas and convert to number
+const parseNumberFromCommas = (value) => {
+  if (!value) return '';
+  return value.toString().replace(/,/g, '');
+};
+
+// Simple InputField component with comma formatting for mortgage amount
+const SimpleInputField = ({ label, value, onChangeText, placeholder, rightLabel, error, isAmount = false }) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  
+  useEffect(() => {
+    if (isAmount && value) {
+      // Format the value when it changes externally
+      setDisplayValue(formatNumberWithCommas(parseNumberFromCommas(value)));
+    } else {
+      setDisplayValue(value);
+    }
+  }, [value, isAmount]);
+  
+  const handleChangeText = (text) => {
+    if (isAmount) {
+      // Remove any non-numeric characters except decimal
+      let cleanValue = text.replace(/[^0-9.]/g, '');
+      
+      // Prevent multiple decimals
+      const decimalCount = (cleanValue.match(/\./g) || []).length;
+      if (decimalCount > 1) return;
+      
+      // Format with commas for display
+      const formattedValue = formatNumberWithCommas(cleanValue);
+      setDisplayValue(formattedValue);
+      
+      // Store the raw number without commas
+      onChangeText(parseNumberFromCommas(cleanValue));
+    } else {
+      setDisplayValue(text);
+      onChangeText(text);
+    }
+  };
+
+  return (
+    <View style={localStyles.inputContainer}>
+      <Text style={localStyles.inputLabel}>{label}</Text>
+      <View style={[localStyles.inputWrapper, error && localStyles.inputError]}>
+        <TextInput
+          style={localStyles.input}
+          value={displayValue}
+          onChangeText={handleChangeText}
+          placeholder={placeholder}
+          keyboardType={isAmount ? "decimal-pad" : "numeric"}
+          placeholderTextColor="#999"
+        />
+        {rightLabel && <Text style={localStyles.inputRightLabel}>{rightLabel}</Text>}
+      </View>
+      {error && <Text style={localStyles.inputErrorText}>{error}</Text>}
     </View>
-    {error && <Text style={localStyles.inputErrorText}>{error}</Text>}
-  </View>
-);
+  );
+};
 
 // Simple PaymentToggle component inline
 const SimplePaymentToggle = ({ selected, onSelect }) => {
@@ -122,14 +184,44 @@ const HomeScreen = ({ navigation }) => {
   const [errors, setErrors] = useState({});
   const [loadingRates, setLoadingRates] = useState(false);
 
-  // Bank rates with different prime rates
+  // Bank rates with different prime rates and brand colors
   const bankRates = {
-    RBC: { name: 'RBC', primeRate: 4.45, displayRate: '4.45%' },
-    SCOTIABANK: { name: 'Scotiabank', primeRate: 4.45, displayRate: '4.45%' },
-    BMO: { name: 'BMO', primeRate: 4.45, displayRate: '4.45%' },
-    CIBC: { name: 'CIBC', primeRate: 4.45, displayRate: '4.45%' },
-    NATIONAL_BANK: { name: 'National Bank', primeRate: 4.45, displayRate: '4.45%' },
-    TD: { name: 'TD', primeRate: 4.60, displayRate: '4.60%' }
+    RBC: { 
+      name: 'RBC', 
+      primeRate: 4.45, 
+      displayRate: '4.45%',
+      color: '#0033A0',
+    },
+    SCOTIABANK: { 
+      name: 'Scotiabank', 
+      primeRate: 4.45, 
+      displayRate: '4.45%',
+      color: '#D41B2C',
+    },
+    BMO: { 
+      name: 'BMO', 
+      primeRate: 4.45, 
+      displayRate: '4.45%',
+      color: '#0A2B4E',
+    },
+    CIBC: { 
+      name: 'CIBC', 
+      primeRate: 4.45, 
+      displayRate: '4.45%',
+      color: '#D6001C',
+    },
+    NATIONAL_BANK: { 
+      name: 'National Bank', 
+      primeRate: 4.45, 
+      displayRate: '4.45%',
+      color: '#0066A1',
+    },
+    TD: { 
+      name: 'TD', 
+      primeRate: 4.60, 
+      displayRate: '4.60%',
+      color: '#008C45',
+    }
   };
   
   const [selectedBank, setSelectedBank] = useState('RBC');
@@ -154,8 +246,11 @@ const HomeScreen = ({ navigation }) => {
   }, [selectedBank, mortgageType, spread, customRate]);
 
   const handleCalculate = () => {
+    // Parse principal - remove commas and convert to number
+    const principalValue = parseFloat(principal);
+    
     const inputs = {
-      principal: parseFloat(principal),
+      principal: principalValue,
       amortization: parseFloat(amortization),
       term: parseFloat(term),
       rate: parseFloat(finalRate)
@@ -213,6 +308,7 @@ const HomeScreen = ({ navigation }) => {
               placeholder="Enter amount"
               rightLabel="CAD"
               error={errors.principal}
+              isAmount={true}
             />
           </View>
           <View style={localStyles.halfWidth}>
@@ -263,7 +359,7 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </View>
         
-        {/* Bank Selection with Prime Rate Display */}
+        {/* Bank Selection with Brand Colors */}
         <View style={localStyles.bankContainer}>
           <Text style={localStyles.label}>Select Bank</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -273,7 +369,10 @@ const HomeScreen = ({ navigation }) => {
                   key={key}
                   style={[
                     localStyles.bankButton,
-                    selectedBank === key && localStyles.bankButtonActive
+                    selectedBank === key && { 
+                      backgroundColor: bank.color,
+                      borderWidth: 0
+                    }
                   ]}
                   onPress={() => setSelectedBank(key)}
                 >
@@ -283,7 +382,6 @@ const HomeScreen = ({ navigation }) => {
                   ]}>
                     {bank.name}
                   </Text>
-                  {/* Show prime rate under bank name when selected */}
                   {selectedBank === key && (
                     <Text style={localStyles.bankPrimeRate}>
                       Prime: {bank.displayRate}
@@ -306,9 +404,10 @@ const HomeScreen = ({ navigation }) => {
           />
         )}
         
-        {(mortgageType === 'fixed') && (
+        {/* Custom Rate Entry for Fixed Rate */}
+        {mortgageType === 'fixed' && (
           <SimpleInputField
-            label={mortgageType === 'fixed' ? "Fixed Rate (%)" : "Custom Interest Rate (%)"}
+            label="Fixed Interest Rate (%)"
             value={customRate}
             onChangeText={setCustomRate}
             placeholder="Enter rate"
@@ -317,26 +416,15 @@ const HomeScreen = ({ navigation }) => {
         )}
         
         {/* Rate Preview */}
-        {finalRate && (
-          <View style={localStyles.ratePreview}>
-            <Text style={localStyles.ratePreviewLabel}>Final Rate:</Text>
-            {mortgageType === 'variable' && finalRate && (
-              <View style={localStyles.formulaBox}>
-                <Text style={localStyles.ratePreviewLabel}>
-                  {bankRates[selectedBank].primeRate}% + ({parseFloat(spread) > 0 ? '+' : ''}{spread || 0}%) = {finalRate}%
-                </Text>
-              </View>
-            )}
-        
-        {/* Fixed Rate Display - Just show the rate */}
-        {mortgageType === 'fixed' && finalRate && (
-          <View style={localStyles.formulaBox}>
-            <Text style={localStyles.formulaText}>
-              Fixed Rate: {finalRate}%
-            </Text>
-          </View>
-        )}
-          </View>
+        {mortgageType === 'variable' && finalRate && (
+          <>
+            <View style={localStyles.ratePreview}>
+              <Text style={localStyles.ratePreviewLabel}>Final Rate:</Text>
+              <Text style={localStyles.formulaText}>
+                {bankRates[selectedBank].primeRate}% + ({parseFloat(spread) > 0 ? '+' : ''}{spread || 0}%) = {finalRate}%
+              </Text>            
+            </View>
+          </>
         )}
         
         <SimplePaymentToggle
@@ -366,7 +454,7 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: 8,
     fontSize: 16,
     color: '#666',
   },
@@ -423,9 +511,8 @@ const localStyles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     minWidth: 80,
-  },
-  bankButtonActive: {
-    backgroundColor: '#28a745',
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   bankName: {
     fontSize: 14,
@@ -437,20 +524,20 @@ const localStyles = StyleSheet.create({
   },
   bankPrimeRate: {
     fontSize: 11,
-    color: '#666',
+    color: '#fff',
     marginTop: 4,
   },
   ratePreview: {
     backgroundColor: '#e8f4fd',
-    borderRadius: 5,
-    padding: 10,
-    marginVertical: 5,
+    borderRadius: 8,
+    padding: 5,
+    marginVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   ratePreviewLabel: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#007bff',
     fontWeight: '600',
   },
@@ -461,22 +548,22 @@ const localStyles = StyleSheet.create({
   },
   formulaBox: {
     backgroundColor: '#e8f4fd',
-    borderRadius: 4,
-    padding: 4,
-    marginBottom: 2,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
     alignItems: 'center',
   },
   formulaText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#007bff',
   },
   calculateButton: {
     backgroundColor: '#007bff',
-    padding: 10,
+    padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 40,
+    marginTop: 8,
+    marginBottom: 10,
   },
   calculateButtonText: {
     color: '#fff',
@@ -484,7 +571,7 @@ const localStyles = StyleSheet.create({
     fontWeight: 'bold',
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   inputLabel: {
     fontSize: 16,
@@ -520,7 +607,7 @@ const localStyles = StyleSheet.create({
     marginTop: 4,
   },
   toggleSection: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   toggleLabel: {
     fontSize: 16,
@@ -553,7 +640,7 @@ const localStyles = StyleSheet.create({
     fontWeight: '600',
   },
   acceleratedContainer: {
-    marginTop: 12,
+    marginTop: 8,
   },
   acceleratedLabel: {
     fontSize: 12,
